@@ -102,7 +102,7 @@ def hash_graph(graph):
 
 def hash_graph_code(graph,physical,logical):
 
-    matrix = nx.to_numpy_array(graph,dtype = int)
+    matrix = nx.to_numpy_array(graph,nodelist=range(0,logical+physical) ,dtype = int)
     canonical = np.array2string(matrix)
 
     for qubit_perm in permutations(range(physical)):
@@ -157,6 +157,7 @@ def find_rep_nodes_code(nx_g,physical,logical):
     pyn_g, node_map = convert_nx_to_pyn(nx_g, partition=partition)
     _, _, _, orbits, _ = pyn.autgrp(pyn_g)
     # Finds node equivalency dictionary
+
     node_equivs = defaultdict(list)
     for node, equiv in enumerate(orbits):
         node_equivs[node_map[equiv]].append(node_map[node])

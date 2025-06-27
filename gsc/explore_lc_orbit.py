@@ -211,7 +211,9 @@ def queued_orbit_search_code(init_graph, local_ops, save_edges, verbose,physical
         visited += 1
         # Gets next graph on queue and finds representative nodes
         graph_label = queue.pop()
+
         graph = class_graph.nodes[graph_label]['nx_graph']
+
         node_equivs = find_rep_nodes_code(graph,physical,logical)
         # Applies set of local ops to each representative node
         for rep_node, equiv_nodes in node_equivs.items():
@@ -219,15 +221,22 @@ def queued_orbit_search_code(init_graph, local_ops, save_edges, verbose,physical
                 new_graph = local_op(graph, rep_node)
 
                 new_edges = list(new_graph.edges())
+
                 new_hash = hash_graph_code(new_graph,physical,logical)
+
                 # Checks new graph is difference to original
                 if sorted(new_graph.edges(data='weight')) == \
                         sorted(graph.edges(data='weight')):
                     continue
                 # If different, tries to find new graph in class
-
                 try:
                     old_label = class_graph.member_hash_table[new_hash]
+
+                    # plt.title("Found Graph!")
+                    # nx.draw_networkx(new_graph,with_labels=True)
+                    # plt.show()
+                    # plt.clf()
+
                     if save_edges:
                         # If new edge adds new edge between members
                         if not class_graph.has_edge(graph_label, old_label):
@@ -244,9 +253,16 @@ def queued_orbit_search_code(init_graph, local_ops, save_edges, verbose,physical
                     # continue
                 # If not in class, creates new class graph node
                 except KeyError:
+
+                    plt.title("New Graph!")
+                    nx.draw_networkx(new_graph,with_labels=True)
+                    plt.show()
+                    plt.clf()
+
                     new_label = max(class_graph.nodes()) + 1
                     class_graph.add_node(new_label, nx_graph=new_graph,
                                          edges=new_edges, hash=new_hash)
+
                     if save_edges:
                         class_graph.add_edge(graph_label, new_label,
                                              equivs=[equiv_nodes],
