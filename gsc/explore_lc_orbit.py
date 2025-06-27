@@ -8,7 +8,9 @@ import itertools as it
 from networkx.readwrite import json_graph
 # Local modules
 from gsc.utils import copy_graph
-from gsc.get_nauty import find_rep_nodes, hash_graph
+from gsc.get_nauty import find_rep_nodes, find_rep_nodes_code, hash_graph, hash_graph_code
+
+import matplotlib.pyplot as plt
 
 
 def init_EC_database_dir(directory='EC_database'):
@@ -187,6 +189,72 @@ def queued_orbit_search(init_graph, local_ops, save_edges, verbose):
                     queue.append(new_label)
     return class_graph
 
+def queued_orbit_search_code(init_graph, local_ops, save_edges, verbose,physical,logical):
+    # Initialises class graph with init_graph
+    init_edges = list(init_graph.edges())
+    init_hash = hash_graph_code(init_graph,physical,logical)
+    class_graph = nx.Graph()
+    class_graph.add_node(0, nx_graph=init_graph,
+                         edges=init_edges, hash=init_hash)
+    class_graph.member_hash_table = {init_hash: 0}
+    # Loops over queue members until empty
+    queue = [0]
+    visited = 0
+    while queue:
+        # Prints live count of explored/known
+        if verbose:
+            out = \
+                str(visited) + '/' + str(len(queue) + visited) + ' visited (' \
+                + str(int(100 * float(visited)/(len(queue) + visited))) + '%)'
+            sys.stdout.write('%s\r' % out)
+            sys.stdout.flush()
+        visited += 1
+        # Gets next graph on queue and finds representative nodes
+        graph_label = queue.pop()
+        graph = class_graph.nodes[graph_label]['nx_graph']
+        node_equivs = find_rep_nodes_code(graph,physical,logical)
+        # Applies set of local ops to each representative node
+        for rep_node, equiv_nodes in node_equivs.items():
+            for op_label, local_op in local_ops:
+                new_graph = local_op(graph, rep_node)
+
+                new_edges = list(new_graph.edges())
+                new_hash = hash_graph_code(new_graph,physical,logical)
+                # Checks new graph is difference to original
+                if sorted(new_graph.edges(data='weight')) == \
+                        sorted(graph.edges(data='weight')):
+                    continue
+                # If different, tries to find new graph in class
+
+                try:
+                    old_label = class_graph.member_hash_table[new_hash]
+                    if save_edges:
+                        # If new edge adds new edge between members
+                        if not class_graph.has_edge(graph_label, old_label):
+                            class_graph.add_edge(graph_label, old_label,
+                                                 equivs=[equiv_nodes],
+                                                 ops=[op_label])
+                        # Else adds any new local ops to edge label
+                        elif op_label not in \
+                                class_graph[graph_label][old_label]['ops']:
+                            class_graph[graph_label][old_label]['ops']\
+                                .append(op_label)
+                            class_graph[graph_label][old_label]['equivs']\
+                                .append(equiv_nodes)
+                    # continue
+                # If not in class, creates new class graph node
+                except KeyError:
+                    new_label = max(class_graph.nodes()) + 1
+                    class_graph.add_node(new_label, nx_graph=new_graph,
+                                         edges=new_edges, hash=new_hash)
+                    if save_edges:
+                        class_graph.add_edge(graph_label, new_label,
+                                             equivs=[equiv_nodes],
+                                             ops=[op_label])
+                    class_graph.member_hash_table.update({new_hash: new_label})
+                    queue.append(new_label)
+
+    return class_graph
 
 def int_relabel_graph(graph):
     """
@@ -230,6 +298,36 @@ def explore_lc_orbit(init_graph, save_edges=True, verbose=True):
             data['edges'] = [(u, v, 1) for u, v in edges]
     return class_graph
 
+def explore_lc_orbit_code(init_graph, physical, logical, save_edges=True, verbose=False):
+    """ Explores the LC equivalence class orbit up to isomorphism """
+    # Tries to get graph dimensions p^m. If not assigned assumes d = 2
+    p = init_graph.__dict__.get('prime', 2)
+    m = init_graph.__dict__.get('power', 1)
+    if m == 1 and not nx.is_connected(init_graph):
+        raise TypeError("Initial graph must be connected.")
+    # Creates finite field for arithmetic and maps graph edge int weights
+    if m > 1:
+        # Creates list of local operations accessible for search
+        local_ops = [('CC%d(c,%d)' % (a, t), make_pp_CC_a(a, t))
+                     for a in range(1, p) for t in range(m)]
+        local_ops += [('EM%d' % (b), make_EM_b(b))
+                      for b in range(2, p)]
+    elif p > 2 and m == 1:
+        local_ops = [('LC' + str(a), make_LC_a(a)) for a in range(1, p)]
+        local_ops += [('EM' + str(b), make_EM_b(b)) for b in range(2, p)]
+    else:
+        local_ops = [('LC', qubit_LC)]
+    # Performs orbit search
+    class_graph = queued_orbit_search_code(init_graph, local_ops, save_edges,verbose,physical,logical)
+    # Adds weighted edge data for qudit class graphs
+    for node, data in class_graph.nodes.data():
+        graph = data['nx_graph']
+        edges = data['edges']
+        if p ** m > 2:
+            data['edges'] = [(u, v, graph[u][v]['weight']) for u, v in edges]
+        else:
+            data['edges'] = [(u, v, 1) for u, v in edges]
+    return class_graph
 
 def get_min_edge_reps(class_graph):
     """ Returns all minimum edge representations for a given LC orbit """

@@ -6,6 +6,8 @@ from collections import defaultdict
 # Local modules
 from gsc.utils import int_to_bits, copy_graph
 
+import numpy as np
+from itertools import permutations
 
 def qudit_graph_map(nx_wg, partition=None):
     """
@@ -98,6 +100,19 @@ def hash_graph(graph):
         g_hash = hash(pyn.certificate(pyn_g))
     return g_hash
 
+def hash_graph_code(graph,physical,logical):
+
+    matrix = nx.to_numpy_array(graph,dtype = int)
+    canonical = np.array2string(matrix)
+
+    for qubit_perm in permutations(range(physical)):
+        for logical_perm in permutations(range(physical,physical + logical)):
+
+            perm = qubit_perm + logical_perm
+            current = np.array2string(matrix[np.ix_(perm,perm)])
+            canonical = max(canonical,current)
+
+    return canonical
 
 def canonical_relabel(nx_g):
     """ Returns isomorphic graph with canonical relabelling """
@@ -131,3 +146,52 @@ def find_rep_nodes(nx_g):
         node_equivs = {u: [v for l_v, v in equivs if l_v == 0]
                        for (l_u, u), equivs in node_equivs.items() if l_u == 0}
     return node_equivs
+
+def find_rep_nodes_code(nx_g,physical,logical):
+    """
+    Takes a NetworkX graph and finds groups of nodes that are equivalent
+    up to automorphism
+    """
+    # Creates PyNauty graph and passes it to PyNauty to get orbits
+    partition = 'member' if nx_g.__dict__.get('power', 1) > 1 else None
+    pyn_g, node_map = convert_nx_to_pyn(nx_g, partition=partition)
+    _, _, _, orbits, _ = pyn.autgrp(pyn_g)
+    # Finds node equivalency dictionary
+    node_equivs = defaultdict(list)
+    for node, equiv in enumerate(orbits):
+        node_equivs[node_map[equiv]].append(node_map[node])
+    # Removes any LC's that act trivially on the graph (i.e. act on d=1 nodes)
+    node_equivs = {node: equivs for node, equivs in node_equivs.items()
+                   if nx_g.degree(node) > 1}
+    # If multigraph, returns orbits of nodes in first layer
+    if nx_g.__dict__.get('dimension', 2) > 2:
+        node_equivs = {u: [v for l_v, v in equivs if l_v == 0]
+                       for (l_u, u), equivs in node_equivs.items() if l_u == 0}
+
+    node_equivs_split = {}
+    shift = 0
+
+    for key,eq_class in node_equivs.items():
+        arr_log = []
+        arr_phys = []
+
+        for elem in eq_class:
+            if elem > physical-1:
+                arr_log.append(elem)
+            else:
+                arr_phys.append(elem)
+
+        log_size = np.array(arr_log).size
+        phys_size = np.array(arr_phys).size
+
+        if log_size != 0 and phys_size != 0:
+            node_equivs_split[arr_log[0]] = arr_log
+            node_equivs_split[arr_phys[0]] = arr_phys
+        elif phys_size != 0:
+            node_equivs_split[arr_phys[0]] = arr_phys
+            shift += 1
+        elif log_size != 0:
+            node_equivs_split[arr_log[0]] = arr_log
+            shift += 1
+
+    return node_equivs_split
