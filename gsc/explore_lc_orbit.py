@@ -232,11 +232,6 @@ def queued_orbit_search_code(init_graph, local_ops, save_edges, verbose,physical
                 try:
                     old_label = class_graph.member_hash_table[new_hash]
 
-                    # plt.title("Found Graph!")
-                    # nx.draw_networkx(new_graph,with_labels=True)
-                    # plt.show()
-                    # plt.clf()
-
                     if save_edges:
                         # If new edge adds new edge between members
                         if not class_graph.has_edge(graph_label, old_label):
@@ -253,11 +248,6 @@ def queued_orbit_search_code(init_graph, local_ops, save_edges, verbose,physical
                     # continue
                 # If not in class, creates new class graph node
                 except KeyError:
-
-                    plt.title("New Graph!")
-                    nx.draw_networkx(new_graph,with_labels=True)
-                    plt.show()
-                    plt.clf()
 
                     new_label = max(class_graph.nodes()) + 1
                     class_graph.add_node(new_label, nx_graph=new_graph,

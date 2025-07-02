@@ -170,29 +170,29 @@ def find_rep_nodes_code(nx_g,physical,logical):
                        for (l_u, u), equivs in node_equivs.items() if l_u == 0}
 
     node_equivs_split = {}
-    shift = 0
 
+    all_visited = []
+    contains_log = False
     for key,eq_class in node_equivs.items():
-        arr_log = []
         arr_phys = []
 
         for elem in eq_class:
             if elem > physical-1:
-                arr_log.append(elem)
+                contains_log = True
+                break
             else:
                 arr_phys.append(elem)
 
-        log_size = np.array(arr_log).size
         phys_size = np.array(arr_phys).size
 
-        if log_size != 0 and phys_size != 0:
-            node_equivs_split[arr_log[0]] = arr_log
+        if phys_size != 0 and contains_log == False:
             node_equivs_split[arr_phys[0]] = arr_phys
-        elif phys_size != 0:
-            node_equivs_split[arr_phys[0]] = arr_phys
-            shift += 1
-        elif log_size != 0:
-            node_equivs_split[arr_log[0]] = arr_log
-            shift += 1
+            all_visited = np.concatenate((all_visited,arr_phys))
+
+        contains_log = False
+
+    for i in range(0,physical+logical):
+        if not i in all_visited:
+            node_equivs_split[i] = [i]
 
     return node_equivs_split
